@@ -1,66 +1,44 @@
-import { useState, useReducer, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react'
 
-import axios from 'axios';
-
-const dataFetchReducer = (state, action) => {
-  switch (action.type) {
-    case 'FETCH_INIT':
-      return {
-        ...state,
-        isLoading: true,
-        isError: false
-      };
-    case 'FETCH_SUCCESS':
-      return {
-        ...state,
-        isLoading: false,
-        isError: false,
-        data: action.payload
-      };
-    case 'FETCH_FAILURE':
-      return {
-        ...state,
-        isLoading: false,
-        isError: true
-      };
-    default:
-      throw new Error();
-  }
-};
-
-export const useFetch = ({ method, headers, payload, urlApi }) => {
-  const [url, setUrl] = useState(urlApi);
-
-  const [state, dispatch] = useReducer(dataFetchReducer, {
-    isLoading: false,
-    isError: false,
-    data: {}
-  });
-
-  const fetchData = useCallback(async () => {
-    dispatch({ type: 'FETCH_INIT' });
-
-    try {
-      let result = {};
-
-      switch (method) {
-        case 'GET':
-          result = await axios(url);
-
-          break;
-
-        case 'POST':
-          result = await axios.post(url, payload, { headers });
-          break;
-        default:
-          break;
+const useFetch = (initialUrl, initialParams = {}, skip = false) => {
+  const [url, updateUrl] = useState(initialUrl)
+  const [params, updateParams] = useState(initialParams)
+  const [data, setData] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasError, setHasError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [refetchIndex, setRefetchIndex] = useState(0)
+  
+  const queryString = Object.keys(params)
+    .map((key) => encodeURIComponent(key) + '=' +
+    encodeURIComponent(params[key])).join('&')
+  
+  const refetch = () => setRefetchIndex((prevRefetchIndex) => prevRefetchIndex + 1)
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      if (skip) return
+      setIsLoading(true)
+      try {
+        const response = await fetch(`${url}${queryString}`)
+        const result = await response.json()
+        if (response.ok) {
+          setData(result)
+        } else {
+          setHasError(true)
+          setErrorMessage(result)
+        }
+      } catch (err) {
+        setError(true)
+        setErrorMessage(err.message)
+      } finally {
+        setIsLoading(false)
       }
-
-      dispatch({ type: 'FETCH_SUCCESS', payload: result.data });
-    } catch (error) {
-      dispatch({ type: 'FETCH_FAILURE' });
     }
-  }, [method, headers, payload, url]);
+    fetchData()
+  }, [url, params, refetchIndex])
+  
+  return { data, isLoading, hasError, errorMessage, updateUrl, updateParams, refetch }
+}
 
-  return [state, fetchData, setUrl];
-};
+export default useFetch
